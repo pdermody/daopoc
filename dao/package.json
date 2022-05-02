@@ -1,4 +1,8 @@
 {
+  "scripts": {
+     "dev": "hardhat node",
+     "staging": "hardhat --config hardhat.config.staging.ts node --hostname 0.0.0.0"
+  },
   "devDependencies": {
     "@nomiclabs/hardhat-ethers": "npm:hardhat-deploy-ethers",
     "@nomiclabs/hardhat-waffle": "^2.0.3",

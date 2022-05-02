@@ -53,6 +53,7 @@ const ReadGovernorContract = (props:Props) => {
   const [error, setError] = useState<string>("");
   const [selectedProposal, setSelectedProposal] = useState<ProposalInfo|null>(null)
   const blocknumber = useEthersState(s => s.blocknumber)
+  const chainId = useEthersState(s => s.chainId)
 
   const onProposalCreatedEvent = (
     proposalId: BigNumber,
@@ -379,7 +380,7 @@ const ReadGovernorContract = (props:Props) => {
       return;
 
       for (let index = 0; index < amount; index++) {
-      await (new ethers.providers.JsonRpcProvider("http://localhost:8545")).send("evm_mine", [])
+      await (new ethers.providers.JsonRpcProvider(`http://${process.env["CHAIN_URLS_"+chainId]}:8545`)).send("evm_mine", [])
     }
     
     props.toast(`Request sent to mine ${amount} blocks.`)
@@ -389,7 +390,7 @@ const ReadGovernorContract = (props:Props) => {
     if (secs === 0)
       return;
     
-    await (new ethers.providers.JsonRpcProvider("http://localhost:8545")).send("evm_increaseTime", [secs*1000])
+    await (new ethers.providers.JsonRpcProvider(`http://${process.env["CHAIN_URLS_"+chainId]}:8545`)).send("evm_increaseTime", [secs*1000])
     
     props.toast(`Request sent to skip ${secs/3600} hours.`)
     moveBlocks(1)

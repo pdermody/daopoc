@@ -11,7 +11,5 @@ export default async (req: NextApiRequest, res: NextApiResponse) => {
   if (proposals[cid])
     res.send(proposals[cid]);
   else 
-    res.send({
-      message: "Unknown or missing chainId"
-    })
+    res.send([])
 }
