@@ -92,9 +92,13 @@ const AccountPanel = (props:AccountPanelProps) => {
         }
 
         return () => {
-            token.removeListener("Transfer", onTransfer)
-            token.removeListener("DelegateChanged", onDelegate)
-            token.removeListener("Approval", onApproval)
+            token.off(token.filters.Transfer(props.account, null, null), onTransfer)
+            token.off(token.filters.Transfer(null, props.account, null), onTransfer)
+            token.off(token.filters.DelegateChanged(props.account, null, null), onDelegate)
+            token.off(token.filters.DelegateChanged(null, props.account, null), onDelegate)
+            token.off(token.filters.DelegateChanged(null, null, props.account), onDelegate)
+            token.off(token.filters.Approval(props.account, null, null), onApproval)
+            token.off(token.filters.Approval(null, props.account, null), onApproval)
         }
     }, [account, ethersProvider, blocknumber])
 
