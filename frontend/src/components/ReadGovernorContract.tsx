@@ -71,10 +71,12 @@ const ReadGovernorContract = (props:Props) => {
     const gov = GovernorContract__factory.connect(env("CONTRACT_GOVERNOR", process.env.NEXT_PUBLIC_CONTRACT_GOVERNOR), ethersProvider);
     const timelock = TimeLock__factory.connect(env("CONTRACT_TIMELOCK", process.env.NEXT_PUBLIC_CONTRACT_TIMELOCK), ethersProvider);
 
-    const updateAllProposalDetails = () => {
-      if (!ethersProvider || !proposalList)
+    const updateAllProposalDetails = (l?:ProposalInfo[]) => {
+      if (l === undefined || !Array.isArray(l))
+        l = proposalList
+      if (!ethersProvider || l === undefined)
         return
-      proposalList.forEach((p:ProposalInfo) => updateProposalDetails(p))
+      l.forEach((p:ProposalInfo) => updateProposalDetails(p))
     }
 
     if (proposalList === undefined)
@@ -83,11 +85,16 @@ const ReadGovernorContract = (props:Props) => {
         headers: { 'Accept': 'application/json' },
       })
       .then((response:any) => response.json())
-      .then((response:ProposalInfo[]) => setProposalList(response))
-      .then(updateAllProposalDetails)
+      .then((response:ProposalInfo[]) => {
+        if (proposalList === undefined){
+          setProposalList(l => l===undefined?response:l)
+          updateAllProposalDetails(response)
+        }
+
+      })
 
     const updateProposalDetails = (p:ProposalInfo) => {
-      if (!ethersProvider)
+      if (!ethersProvider || p.state === 7) // executed
         return
       const gov = GovernorContract__factory.connect(env("CONTRACT_GOVERNOR", process.env.NEXT_PUBLIC_CONTRACT_GOVERNOR), ethersProvider);
       gov.proposalVotes(p.id).then((v:VotingResponse) => onVotingResults(p.id.toString(), v))
@@ -367,7 +374,7 @@ const ReadGovernorContract = (props:Props) => {
             description: description      
           })
       })
-    }).then(() => toast("Request to change color sent to create a new proposal."))
+    }).then(() => toast("Request to change channel sent to create a new proposal."))
     .catch(error => toast(error.data?.message ? error.data.message : error.message,'error'))
   }
 
@@ -451,7 +458,7 @@ const ReadGovernorContract = (props:Props) => {
         <Text><b>Proposals</b></Text>
           
         <Wrap spacing='1rem' justify='space-evenly'>
-          {proposalList && proposalList.map(p => <ProposalPanel 
+          {proposalList && proposalList.filter(p => p.state!==7).map(p => <ProposalPanel 
             key={p.id} 
             proposal={p} 
             onClickVote={onClickVote} 
@@ -492,8 +499,8 @@ const ReadGovernorContract = (props:Props) => {
                 onSizeProposalInputOpen()
                 break;
               }
-              case ProposalType.ChangeSize: {
-                onSizeProposalInputOpen()
+              case ProposalType.ChangeColor: {
+                onColorProposalInputOpen()
                 break;
               }
               case ProposalType.ChangeChannel: {

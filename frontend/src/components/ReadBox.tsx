@@ -53,8 +53,8 @@ export default function ReadBox(props:Props){
   const w1=boxSize||300
   const h1=w1*.5625
   const m=5
-  const w2=w1+m*2
-  const h2=h1+m*2
+  const w2=w1+m
+  const h2=h1+m
 
   return (
     <VStack>
@@ -68,14 +68,14 @@ export default function ReadBox(props:Props){
         <Text><b>Box Specs</b>: {boxSize}, {boxColor}, <Button variant="link">{boxVideo}</Button></Text>
       </Box>
       <Box width={w2+"px"} height={h2+"px"} backgroundColor={"dark"+boxColor} borderColor="black" borderWidth="2px" m="0">
-        <iframe 
+        {boxVideo && <iframe 
           width={w1} 
           height={h1} 
-          src={boxVideo+"?controls=0&amp;autoplay=1"} 
+          src={boxVideo+"?controls=0&autoplay=1"} 
           title="YouTube video player" 
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           style={{padding: m+"px"}}>
-        </iframe>
+        </iframe>}
       </Box>
     </VStack>
   )

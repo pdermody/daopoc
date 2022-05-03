@@ -6,13 +6,11 @@ const FILE = "proposals.json"
 const registerProposal = async (req: NextApiRequest, res: NextApiResponse) => {
   const { id, chainId } = req.body;
 
-  let proposals = JSON.parse(fs.readFileSync(FILE, "utf8"))
+  let proposals = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : {}
 
-  if (!proposals || !proposals[chainId]) {
-    if (!proposals)
-      proposals = {}
+  if (!proposals[chainId])
     proposals[chainId] = []
-  }
+
   proposals[chainId!.toString()].push(req.body)
   fs.writeFileSync(FILE, JSON.stringify(proposals))
 

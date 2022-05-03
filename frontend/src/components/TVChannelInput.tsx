@@ -9,15 +9,15 @@ export interface Channel {
 const channels:{[key:string]: Channel} = {
     "Guanacaste": {
         name: "Guanacaste",
-        url: "https://www.youtube.com/embed/LWrtCsXe8nA?controls=0"
+        url: "https://www.youtube.com/embed/LWrtCsXe8nA"
     },
     "Nature": {
         name: "Nature",
-        url: "https://www.youtube.com/embed/aoKsqv3nreQ?controls=0"
+        url: "https://www.youtube.com/embed/aoKsqv3nreQ"
     },
     "Travel": {
         name: "Travel",
-        url: "https://www.youtube.com/embed/dO-JZmExTP4?controls=0"
+        url: "https://www.youtube.com/embed/dO-JZmExTP4"
     },
 }
 
