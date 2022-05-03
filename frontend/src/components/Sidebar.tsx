@@ -105,7 +105,7 @@ const SidebarContent = ({ onClose, ...rest }: SidebarProps) => {
       h="full"
       {...rest}>
       <Flex h="20" alignItems="center" mx="8" justifyContent="space-between">
-        <Image src='/imgs/logo.svg' boxSize='5rem' />
+        <Image src='/imgs/logo.svg' boxSize='5rem' alt='Logo'/>
         <CloseButton display={{ base: 'flex', md: 'none' }} onClick={onClose} />
       </Flex>
       {account ? LinkItems.map((link) => (

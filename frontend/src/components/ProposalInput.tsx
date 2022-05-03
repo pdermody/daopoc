@@ -3,7 +3,8 @@ import { ChangeEvent, useState } from "react";
 
 export enum ProposalType {
     ChangeSize,
-    ChangeColor
+    ChangeColor,
+    ChangeChannel
 }
 
 interface ProposalInputProps {
@@ -15,17 +16,15 @@ interface ProposalInputProps {
 }
  
 const ProposalInput = (props:ProposalInputProps) => {
-    const [value, setValue] = useState(ProposalType.ChangeSize)
-    const handleChange = (e:ChangeEvent<HTMLSelectElement>) => {
-        setValue(ProposalType[e.target.value as keyof typeof ProposalType])
-    }
+    const [value, setValue] = useState<ProposalType|undefined>(undefined)
+    const handleChange = (e:ChangeEvent<HTMLSelectElement>) => setValue(ProposalType[e.target.value as keyof typeof ProposalType])
 
     const onClose = () => {
         props.onClose();
     }
     const onConfirm = () => {
         props.onClose();
-        props.onConfirm(value);
+        props.onConfirm(value||0);
     }
 
     return (
@@ -38,13 +37,14 @@ const ProposalInput = (props:ProposalInputProps) => {
             <ModalCloseButton />
             <ModalBody>
                 <Select placeholder={props.text} onChange={handleChange}>
-                    <option value='0'>Change Size</option>
-                    <option value='1'>Change Color</option>
+                    <option value='ChangeSize'>Change Size</option>
+                    <option value='ChangeColor'>Change Color</option>
+                    <option value='ChangeChannel'>Change Channel</option>
                 </Select>
             </ModalBody>
 
             <ModalFooter>
-                <Button colorScheme='blue' mr={3} onClick={onConfirm}>
+                <Button colorScheme='blue' mr={3} onClick={onConfirm} disabled={value===undefined}>
                     OK
                 </Button>
                 <Button variant='ghost' mr={3} onClick={onClose}>

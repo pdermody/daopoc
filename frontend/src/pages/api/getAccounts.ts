@@ -28,6 +28,8 @@ const keys:KeyPair[] = [
 
 import { NextApiRequest, NextApiResponse } from "next";
 
-export default async (req: NextApiRequest, res: NextApiResponse) => {
+const getAccount = async (req: NextApiRequest, res: NextApiResponse) => {
     res.send(JSON.stringify(keys));
 }
+
+export default getAccount

@@ -23,7 +23,7 @@ const Home: NextPage = () => {
       duration: 4000,
       isClosable: true,
     })
-  }, [])
+  }, [toast])
 
   useEffect(() => {
     if (!ethersProvider)
@@ -35,9 +35,9 @@ const Home: NextPage = () => {
     ethersProvider.on("block", onBlockEvent)
 
     return () => {
-      ethersProvider.removeListener("block", onBlockEvent)
+      ethersProvider.off("block", onBlockEvent)
     }
-  },[ethersProvider])
+  },[ethersProvider, showToast])
 
   return (
     <>
@@ -71,7 +71,7 @@ const Home: NextPage = () => {
         {account  
           ? <Box mb={0} p={4} w='100%' borderWidth="1px" borderRadius="lg" boxShadow='md'>
               <Heading my={4}  fontSize='xl'>Box Contract</Heading>
-              <ReadBox 
+              <ReadBox
                 currentAccount={account}
               />
             </Box>:""}

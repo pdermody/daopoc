@@ -3,7 +3,7 @@ import fs from "fs";
 
 const FILE = "proposals.json"
 
-export default async (req: NextApiRequest, res: NextApiResponse) => {
+const getProposals = async (req: NextApiRequest, res: NextApiResponse) => {
   const { cid } = req.query as { cid: string };
 
   const proposals = JSON.parse(fs.readFileSync(FILE, "utf8"))
@@ -13,3 +13,5 @@ export default async (req: NextApiRequest, res: NextApiResponse) => {
   else 
     res.send([])
 }
+
+export default getProposals

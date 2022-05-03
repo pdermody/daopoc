@@ -1,24 +1,38 @@
 import { Button, Modal, ModalBody, ModalCloseButton, ModalContent, ModalFooter, ModalHeader, ModalOverlay, NumberDecrementStepper, NumberIncrementStepper, NumberInput, NumberInputField, NumberInputStepper, Select, Text, useDisclosure } from "@chakra-ui/react";
 import { ChangeEvent, useState } from "react";
 
-export enum Color {
-    Red,
-    Green,
-    Blue
+export interface Channel {
+    name: string
+    url: string
 }
 
-interface ColorInputProps {
+const channels:{[key:string]: Channel} = {
+    "Guanacaste": {
+        name: "Guanacaste",
+        url: "https://www.youtube.com/embed/LWrtCsXe8nA?controls=0"
+    },
+    "Nature": {
+        name: "Nature",
+        url: "https://www.youtube.com/embed/aoKsqv3nreQ?controls=0"
+    },
+    "Travel": {
+        name: "Travel",
+        url: "https://www.youtube.com/embed/dO-JZmExTP4?controls=0"
+    },
+}
+
+interface ChannelInputProps {
     title:string, 
     text:string, 
     isOpen:boolean, 
     onClose:()=>void,
-    onConfirm:(val:Color)=>void,
+    onConfirm:(val:Channel)=>void,
 }
  
-const ColorInput = (props:ColorInputProps) => {
-    const [value, setValue] = useState<Color|undefined>(undefined)
+const ChannelInput = (props:ChannelInputProps) => {
+    const [value, setValue] = useState<Channel|undefined>(undefined)
     const handleChange = (e:ChangeEvent<HTMLSelectElement>) => {
-        setValue(Color[e.target.value as keyof typeof Color])
+        setValue(channels[e.target.value])
     }
 
     const onClose = () => {
@@ -26,7 +40,7 @@ const ColorInput = (props:ColorInputProps) => {
     }
     const onConfirm = () => {
         props.onClose();
-        props.onConfirm(value||Color.Red);
+        props.onConfirm(value||channels[0]);
     }
 
     return (
@@ -39,9 +53,9 @@ const ColorInput = (props:ColorInputProps) => {
             <ModalCloseButton />
             <ModalBody>
                 <Select placeholder={props.text} onChange={handleChange}>
-                    <option value='Red'>Red</option>
-                    <option value='Green'>Green</option>
-                    <option value='Blue'>Blue</option>
+                    {Object.keys(channels).map(k => (
+                        <option value={k} key={k}>{channels[k].name}</option>
+                    ))}
                 </Select>
             </ModalBody>
 
@@ -58,4 +72,4 @@ const ColorInput = (props:ColorInputProps) => {
     )
 }
 
-export default ColorInput;
+export default ChannelInput;

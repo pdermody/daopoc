@@ -61,10 +61,12 @@ const getAccount = (ethersProvider:ethers.providers.Web3Provider, switchAccount:
 }
 
 const getNetworkDetails = (set:ZustandSetter, get:ZustandGetter) => {
+  const chainNames = JSON.parse(process.env.NEXT_PUBLIC_CHAIN_NAMES||"")
+
   get().ethersProvider?.getNetwork().then((n) => {
     set({
       chainId: n.chainId,
-      chainName: n.name,
+      chainName: chainNames[n.chainId],
       ensAddress: n.ensAddress||""
     })
   })

@@ -14,19 +14,19 @@ const NetworkInfo = () => {
     const chainId = useEthersState(s => s.chainId)
     const chainName = useEthersState(s => s.chainName)
 
-    const reloadBalance = () => {
-        if (account && ethersProvider) {
-          ethersProvider.getBalance(account).then((result)=>{
-            setBalance(ethers.utils.formatEther(result))
-          })
-        }
-      }
-    
     useEffect(() => {
       if (!ethersProvider)
         return
 
-      ethersProvider?.getBlock(blocknumber).then(block => {
+        const reloadBalance = () => {
+          if (account && ethersProvider) {
+            ethersProvider.getBalance(account).then((result)=>{
+              setBalance(ethers.utils.formatEther(result))
+            })
+          }
+        }
+      
+        ethersProvider?.getBlock(blocknumber).then(block => {
         const ts = new Date(block.timestamp-(new Date()).getTimezoneOffset()*60*1000)
         setTimestamp((prevTS:Date|undefined) => ts)
       })

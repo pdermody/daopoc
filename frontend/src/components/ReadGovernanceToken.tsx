@@ -21,30 +21,8 @@ const ReadGovernanceToken = (props:Props) => {
   const [shareholders,setShareholders]=useState<string[]>([])
   const [error, setError] = useState<string>("");
   const blocknumber = useEthersState(s => s.blocknumber)
-
-  const reloadShareHolders = () => {
-    if(!ethersProvider) 
-      return
-
-    setShareholders([])
-    const token = GovernanceToken__factory.connect(env("CONTRACT_GOVERNANCE_TOKEN", process.env.NEXT_PUBLIC_CONTRACT_GOVERNANCE_TOKEN), ethersProvider);
-    token.shareholderCount().then((result:ethers.BigNumber)=>{
-      let count = result.toNumber();
-      for (let i = 1; i <= count; i++) {
-        token.shareholders(i).then((sh:string)=>{
-          const sh_lc = sh.toLocaleLowerCase()
-          setShareholders((prev) => prev.includes(sh_lc) ? prev : [...prev, sh_lc]);
-        }).catch(error => { console.error("shareholders("+i+")", error); setError(error.message); });
-      }
-    }).catch(error => { console.error("shareholderCount()", error); setError(error.message); });
-  }
-  
-  const onTransfer = (from:string, to:string, amt:BigNumber, e:TransferEvent) => {
-    if (e.blockNumber < blocknumber || blocknumber == 0)
-      return
-    reloadShareHolders()
-    props.toast(`${commify(formatEther(amt||0))} ETH transferred from ${shorten(from)} to ${shorten(to)}`)
-  }
+  const propsAccount = props.account
+  const toast = props.toast
 
   useEffect( () => {
     if(!ethersProvider) 
@@ -52,22 +30,31 @@ const ReadGovernanceToken = (props:Props) => {
 
     const token = GovernanceToken__factory.connect(env("CONTRACT_GOVERNANCE_TOKEN", process.env.NEXT_PUBLIC_CONTRACT_GOVERNANCE_TOKEN), ethersProvider);
 
-    token.on(token.filters.Transfer(props.account, null, null), onTransfer)
-    token.on(token.filters.Transfer(null, props.account, null), onTransfer)
-
-    return () => {
-      token.off("Transfer", onTransfer)
+    const reloadShareHolders = () => {
+      setShareholders([])
+      token.shareholderCount().then((result:ethers.BigNumber)=>{
+        let count = result.toNumber();
+        for (let i = 1; i <= count; i++) {
+          token.shareholders(i).then((sh:string)=>{
+            const sh_lc = sh.toLocaleLowerCase()
+            setShareholders((prev) => prev.includes(sh_lc) ? prev : [...prev, sh_lc]);
+          }).catch(error => { console.error("shareholders("+i+")", error); setError(error.message); });
+        }
+      }).catch(error => { console.error("shareholderCount()", error); setError(error.message); });
     }
-  },[ethersProvider, blocknumber])  
+    
+    const onTransfer = (from:string, to:string, amt:BigNumber, e:TransferEvent) => {
+      if (e.blockNumber < blocknumber || blocknumber == 0)
+        return
+      reloadShareHolders()
+      toast(`${commify(formatEther(amt||0))} ETH transferred from ${shorten(from)} to ${shorten(to)}`)
+    }
+  
+    token.on(token.filters.Transfer(propsAccount, null, null), onTransfer)
+    token.on(token.filters.Transfer(null, propsAccount, null), onTransfer)
 
-  useEffect( () => {
-    if(!ethersProvider) 
-      return
-
-    const token = GovernanceToken__factory.connect(env("CONTRACT_GOVERNANCE_TOKEN", process.env.NEXT_PUBLIC_CONTRACT_GOVERNANCE_TOKEN), ethersProvider);
- 
     token.totalSupply().then((result:ethers.BigNumber)=>{
-        setTotalSupply(result)
+      setTotalSupply(result)
     }).catch(error => { console.error("totalSupply()", error); setError(error.message); });
 
     token.symbol().then((symbol:string)=>{
@@ -75,7 +62,11 @@ const ReadGovernanceToken = (props:Props) => {
     }).catch(error => { console.error("symbol()", error); setError(error.message); });
 
     reloadShareHolders()
-  },[ethersProvider])  
+
+    return () => {
+      token.off("Transfer", onTransfer)
+    }    
+  },[ethersProvider, blocknumber, propsAccount, toast])  
 
   return (
     <VStack>
@@ -101,7 +92,7 @@ const ReadGovernanceToken = (props:Props) => {
       </Box>
       <Wrap spacing='1rem' justify='space-evenly'>
         {shareholders.map((sh,i) => (
-            <AccountPanel key={sh} account={sh} toast={props.toast} index={i} totalSypplyTokens={totalSupply||ethers.constants.Zero} />
+            <AccountPanel key={sh} account={sh} toast={toast} index={i} totalSypplyTokens={totalSupply||ethers.constants.Zero} />
           ))}
       </Wrap>
     </VStack>

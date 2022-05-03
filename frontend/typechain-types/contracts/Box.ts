@@ -30,10 +30,12 @@ export interface BoxInterface extends utils.Interface {
   functions: {
     "getColor()": FunctionFragment;
     "getSize()": FunctionFragment;
+    "getVideo()": FunctionFragment;
     "owner()": FunctionFragment;
     "renounceOwnership()": FunctionFragment;
     "setColor(string)": FunctionFragment;
     "setSize(uint256)": FunctionFragment;
+    "setVideo(string)": FunctionFragment;
     "transferOwnership(address)": FunctionFragment;
   };
 
@@ -41,15 +43,18 @@ export interface BoxInterface extends utils.Interface {
     nameOrSignatureOrTopic:
       | "getColor"
       | "getSize"
+      | "getVideo"
       | "owner"
       | "renounceOwnership"
       | "setColor"
       | "setSize"
+      | "setVideo"
       | "transferOwnership"
   ): FunctionFragment;
 
   encodeFunctionData(functionFragment: "getColor", values?: undefined): string;
   encodeFunctionData(functionFragment: "getSize", values?: undefined): string;
+  encodeFunctionData(functionFragment: "getVideo", values?: undefined): string;
   encodeFunctionData(functionFragment: "owner", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "renounceOwnership",
@@ -60,6 +65,7 @@ export interface BoxInterface extends utils.Interface {
     functionFragment: "setSize",
     values: [BigNumberish]
   ): string;
+  encodeFunctionData(functionFragment: "setVideo", values: [string]): string;
   encodeFunctionData(
     functionFragment: "transferOwnership",
     values: [string]
@@ -67,6 +73,7 @@ export interface BoxInterface extends utils.Interface {
 
   decodeFunctionResult(functionFragment: "getColor", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "getSize", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "getVideo", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "renounceOwnership",
@@ -74,6 +81,7 @@ export interface BoxInterface extends utils.Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "setColor", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "setSize", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "setVideo", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "transferOwnership",
     data: BytesLike
@@ -83,11 +91,13 @@ export interface BoxInterface extends utils.Interface {
     "ColorChanged(string)": EventFragment;
     "OwnershipTransferred(address,address)": EventFragment;
     "SizeChanged(uint256)": EventFragment;
+    "VideoChanged(string)": EventFragment;
   };
 
   getEvent(nameOrSignatureOrTopic: "ColorChanged"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "OwnershipTransferred"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "SizeChanged"): EventFragment;
+  getEvent(nameOrSignatureOrTopic: "VideoChanged"): EventFragment;
 }
 
 export interface ColorChangedEventObject {
@@ -115,6 +125,13 @@ export interface SizeChangedEventObject {
 export type SizeChangedEvent = TypedEvent<[BigNumber], SizeChangedEventObject>;
 
 export type SizeChangedEventFilter = TypedEventFilter<SizeChangedEvent>;
+
+export interface VideoChangedEventObject {
+  newVideo: string;
+}
+export type VideoChangedEvent = TypedEvent<[string], VideoChangedEventObject>;
+
+export type VideoChangedEventFilter = TypedEventFilter<VideoChangedEvent>;
 
 export interface Box extends BaseContract {
   connect(signerOrProvider: Signer | Provider | string): this;
@@ -147,6 +164,8 @@ export interface Box extends BaseContract {
 
     getSize(overrides?: CallOverrides): Promise<[BigNumber]>;
 
+    getVideo(overrides?: CallOverrides): Promise<[string]>;
+
     owner(overrides?: CallOverrides): Promise<[string]>;
 
     renounceOwnership(
@@ -163,6 +182,11 @@ export interface Box extends BaseContract {
       overrides?: Overrides & { from?: string | Promise<string> }
     ): Promise<ContractTransaction>;
 
+    setVideo(
+      newVideo: string,
+      overrides?: Overrides & { from?: string | Promise<string> }
+    ): Promise<ContractTransaction>;
+
     transferOwnership(
       newOwner: string,
       overrides?: Overrides & { from?: string | Promise<string> }
@@ -172,6 +196,8 @@ export interface Box extends BaseContract {
   getColor(overrides?: CallOverrides): Promise<string>;
 
   getSize(overrides?: CallOverrides): Promise<BigNumber>;
+
+  getVideo(overrides?: CallOverrides): Promise<string>;
 
   owner(overrides?: CallOverrides): Promise<string>;
 
@@ -189,6 +215,11 @@ export interface Box extends BaseContract {
     overrides?: Overrides & { from?: string | Promise<string> }
   ): Promise<ContractTransaction>;
 
+  setVideo(
+    newVideo: string,
+    overrides?: Overrides & { from?: string | Promise<string> }
+  ): Promise<ContractTransaction>;
+
   transferOwnership(
     newOwner: string,
     overrides?: Overrides & { from?: string | Promise<string> }
@@ -199,6 +230,8 @@ export interface Box extends BaseContract {
 
     getSize(overrides?: CallOverrides): Promise<BigNumber>;
 
+    getVideo(overrides?: CallOverrides): Promise<string>;
+
     owner(overrides?: CallOverrides): Promise<string>;
 
     renounceOwnership(overrides?: CallOverrides): Promise<void>;
@@ -206,6 +239,8 @@ export interface Box extends BaseContract {
     setColor(newColor: string, overrides?: CallOverrides): Promise<void>;
 
     setSize(newValue: BigNumberish, overrides?: CallOverrides): Promise<void>;
+
+    setVideo(newVideo: string, overrides?: CallOverrides): Promise<void>;
 
     transferOwnership(
       newOwner: string,
@@ -228,12 +263,17 @@ export interface Box extends BaseContract {
 
     "SizeChanged(uint256)"(newSize?: null): SizeChangedEventFilter;
     SizeChanged(newSize?: null): SizeChangedEventFilter;
+
+    "VideoChanged(string)"(newVideo?: null): VideoChangedEventFilter;
+    VideoChanged(newVideo?: null): VideoChangedEventFilter;
   };
 
   estimateGas: {
     getColor(overrides?: CallOverrides): Promise<BigNumber>;
 
     getSize(overrides?: CallOverrides): Promise<BigNumber>;
+
+    getVideo(overrides?: CallOverrides): Promise<BigNumber>;
 
     owner(overrides?: CallOverrides): Promise<BigNumber>;
 
@@ -251,6 +291,11 @@ export interface Box extends BaseContract {
       overrides?: Overrides & { from?: string | Promise<string> }
     ): Promise<BigNumber>;
 
+    setVideo(
+      newVideo: string,
+      overrides?: Overrides & { from?: string | Promise<string> }
+    ): Promise<BigNumber>;
+
     transferOwnership(
       newOwner: string,
       overrides?: Overrides & { from?: string | Promise<string> }
@@ -261,6 +306,8 @@ export interface Box extends BaseContract {
     getColor(overrides?: CallOverrides): Promise<PopulatedTransaction>;
 
     getSize(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    getVideo(overrides?: CallOverrides): Promise<PopulatedTransaction>;
 
     owner(overrides?: CallOverrides): Promise<PopulatedTransaction>;
 
@@ -275,6 +322,11 @@ export interface Box extends BaseContract {
 
     setSize(
       newValue: BigNumberish,
+      overrides?: Overrides & { from?: string | Promise<string> }
+    ): Promise<PopulatedTransaction>;
+
+    setVideo(
+      newVideo: string,
       overrides?: Overrides & { from?: string | Promise<string> }
     ): Promise<PopulatedTransaction>;
 
