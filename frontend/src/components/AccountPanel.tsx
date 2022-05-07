@@ -33,6 +33,8 @@ const AccountPanel = (props:AccountPanelProps) => {
     const { isOpen:isTransferInputOpen, onOpen:onTransferInputOpen, onClose:onTransferInputClose } = useDisclosure()
     const { isOpen:isTransferEthInputOpen, onOpen:onTransferEthInputOpen, onClose:onTransferEthInputClose } = useDisclosure()
 
+    const [showWholePropsAccount,setShowWholePropsAccount]= useState<boolean>(false)
+    const [showWholePrivateKey,setShowWholePrivateKey]= useState<boolean>(false)
     const propsAccount = props.account
     const totalSypplyTokens = props.totalSypplyTokens
     const privatekey = props.privatekey
@@ -146,13 +148,24 @@ const AccountPanel = (props:AccountPanelProps) => {
         }
 
     const onCopyAccount = () => {
-        navigator.clipboard.writeText(propsAccount)
-        toast("Public Key Copied!")
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(propsAccount)
+            toast("Public Key Copied: "+propsAccount)
+        }
+        else
+            setShowWholePropsAccount(!showWholePropsAccount)
+        console.log(propsAccount)
     }
 
     const onCopyPrivateKey = () => {
-        navigator.clipboard.writeText(privatekey||"")
-        toast("Private Key Copied!")
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(privatekey||"")
+            toast("Private Key Copied!")
+        }
+        else
+            setShowWholePrivateKey(!showWholePrivateKey)
+
+        console.log(privatekey)
     }
     
     const onTransferShares = (val:number) => {
@@ -227,7 +240,7 @@ const AccountPanel = (props:AccountPanelProps) => {
                         {"Account " + (props.index+1) + ":"} 
                     </Box>
                     <Badge colorScheme='blue' ml='2' >
-                        {shorten(propsAccount)}
+                        {showWholePropsAccount ? (<>{propsAccount}<br/></>) : shorten(propsAccount)}
                         <IconButton variant="link" color="ButtonText" ml="2" size="xs" title='Copy' icon={<FaCopy size=".6rem" />} aria-label='Copy Public Key' onClick={onCopyAccount} />
                     </Badge>
                 </Box>
@@ -299,7 +312,7 @@ const AccountPanel = (props:AccountPanelProps) => {
                         ml='2'
                         as='span'
                     >
-                        {shorten(privatekey)}
+                        {showWholePrivateKey ? (<>{privatekey}<br/></>) : shorten(privatekey)}
                         <IconButton variant="link" color="ButtonText" ml="2" size="xs" title='Copy' icon={<FaCopy size=".6rem" />} aria-label='Copy Private Key' onClick={onCopyPrivateKey} />
                   </Box>
                 </Box> : ""}
