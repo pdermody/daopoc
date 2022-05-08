@@ -1,6 +1,5 @@
-
-import React, {useCallback, useEffect, useState } from 'react';
-import {Alert, AlertDescription, AlertIcon, AlertStatus, AlertTitle, Badge, Box, Center, Heading, HStack, Image, Table, TableCaption, TableContainer, Tbody, Td, Text, Tfoot, Th, Thead, Tr, VStack, Wrap} from '@chakra-ui/react'
+import React, {useState } from 'react';
+import {Alert, AlertDescription, AlertIcon, AlertStatus, AlertTitle, Badge, Box, Text, VStack, Wrap} from '@chakra-ui/react'
 import {BigNumber, ethers} from 'ethers'
 import { GovernanceToken__factory } from "../..//typechain-types/factories/contracts"
 import { env, shorten } from 'utils/util';
@@ -8,6 +7,7 @@ import { commify, formatEther } from 'ethers/lib/utils';
 import { useEthersState } from 'store/AccountData';
 import AccountPanel from './AccountPanel';
 import { TransferEvent } from '../../typechain-types/contracts/GovernanceToken';
+import { useDebouncedEffect } from 'utils/debounce';
 
 interface Props {
     account: string | undefined
@@ -16,57 +16,60 @@ interface Props {
 
 const ReadGovernanceToken = (props:Props) => {
   const ethersProvider = useEthersState(s => s.ethersProvider)
+  const userAccount = props.account
   const [totalSupply,setTotalSupply]=useState<ethers.BigNumber>()
   const [symbol,setSymbol]= useState<string>("")
   const [shareholders,setShareholders]=useState<string[]>([])
   const [error, setError] = useState<string>("");
   const blocknumber = useEthersState(s => s.blocknumber)
-  const propsAccount = props.account
+  const stateId = useEthersState(s => s.stateId)
   const toast = props.toast
 
-  useEffect( () => {
-    if(!ethersProvider) 
-      return
+  const token = ethersProvider && GovernanceToken__factory.connect(env("CONTRACT_GOVERNANCE_TOKEN", process.env.NEXT_PUBLIC_CONTRACT_GOVERNANCE_TOKEN), ethersProvider);
 
-    const token = GovernanceToken__factory.connect(env("CONTRACT_GOVERNANCE_TOKEN", process.env.NEXT_PUBLIC_CONTRACT_GOVERNANCE_TOKEN), ethersProvider);
-
-    const reloadShareHolders = () => {
-      setShareholders([])
-      token.shareholderCount().then((result:ethers.BigNumber)=>{
-        let count = result.toNumber();
-        for (let i = 1; i <= count; i++) {
-          token.shareholders(i).then((sh:string)=>{
-            const sh_lc = sh.toLocaleLowerCase()
-            setShareholders((prev) => prev.includes(sh_lc) ? prev : [...prev, sh_lc]);
-          }).catch(error => { console.error("shareholders("+i+")", error); setError(error.message); });
-        }
-      }).catch(error => { console.error("shareholderCount()", error); setError(error.message); });
-    }
-    
-    const onTransfer = (from:string, to:string, amt:BigNumber, e:TransferEvent) => {
-      if (e.blockNumber < blocknumber || blocknumber == 0)
-        return
-      reloadShareHolders()
-      toast(`${commify(formatEther(amt||0))} ETH transferred from ${shorten(from)} to ${shorten(to)}`)
-    }
+  const reloadShareHolders = () => {
+    setShareholders([])
+    token?.shareholderCount().then((result:ethers.BigNumber)=>{
+      let count = result.toNumber();
+      for (let i = 1; i <= count; i++) {
+        token?.shareholders(i).then((sh:string)=>{
+          const sh_lc = sh.toLocaleLowerCase()
+          setShareholders((prev) => prev.includes(sh_lc) ? prev : [...prev, sh_lc]);
+        }).catch(error => { console.error("shareholders("+i+")", error); });
+      }
+    }).catch(error => { console.error("shareholderCount()", error); });
+  }
   
-    token.on(token.filters.Transfer(propsAccount, null, null), onTransfer)
-    token.on(token.filters.Transfer(null, propsAccount, null), onTransfer)
-
-    token.totalSupply().then((result:ethers.BigNumber)=>{
-      setTotalSupply(result)
-    }).catch(error => { console.error("totalSupply()", error); setError(error.message); });
-
-    token.symbol().then((symbol:string)=>{
-      setSymbol(symbol)
-    }).catch(error => { console.error("symbol()", error); setError(error.message); });
-
+  const onTransfer = (from:string, to:string, amt:BigNumber, e:TransferEvent) => {
+    if (e.blockNumber < blocknumber || blocknumber == 0)
+      return
     reloadShareHolders()
+    toast(`${commify(formatEther(amt||0))} ETH transferred from ${shorten(from)} to ${shorten(to)}`)
+  }
 
-    return () => {
-      token.off("Transfer", onTransfer)
-    }    
-  },[ethersProvider, blocknumber, propsAccount, toast])  
+  useDebouncedEffect(() => {
+    token?.on(token?.filters.Transfer(userAccount, null, null), onTransfer)
+    token?.on(token?.filters.Transfer(null, userAccount, null), onTransfer)
+
+    token?.totalSupply().then((result:ethers.BigNumber)=>{
+      setTotalSupply(result)
+    }).catch(error => { 
+      console.error("totalSupply()", error)
+      setTotalSupply(ethers.constants.Zero)
+    });
+
+    token?.symbol().then((symbol:string)=>{
+      setSymbol(symbol)
+    }).catch(error => { 
+      console.error("symbol()", error); 
+      setSymbol("")
+    });
+
+    reloadShareHolders()   
+  }, () => {
+    token?.off(token?.filters.Transfer(userAccount, null, null), onTransfer)
+    token?.off(token?.filters.Transfer(null, userAccount, null), onTransfer)
+  }, [stateId, ethersProvider, userAccount, toast])  
 
   return (
     <VStack>

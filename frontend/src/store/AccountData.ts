@@ -10,14 +10,12 @@ import { ethers } from 'ethers';
  * 
  * MetaMask is one example that will work. Also: WalletConnect, Brave, Tally, Dapper, Gnosis Safe, Frame, Web3 Browsers, etc
  * 
- * Consider to expand support for other wallets: https://github.com/Web3Modal/web3modal
+ * Consider expanding support for other wallets: https://github.com/Web3Modal/web3modal
  * 
  * Scenarios 
  * 1. Connect wallet - if wallet changes - setup network and account listener and get network details and get account number
  * 2. Switch network - if network details change - 
  * 3. Switch account - 
- * 4. Get account number - 
- * 4. Get network details - 
  */
 interface EthersStateData {
   walletProvider: string
@@ -27,6 +25,7 @@ interface EthersStateData {
   chainName:string
   ensAddress:string
   blocknumber: number
+  stateId:number // Changes any time the network or account change. Use this to refresh your components state
 }
 
 export interface EthersStateType extends EthersStateData {
@@ -44,6 +43,7 @@ const defaultEthersStateData:EthersStateData = {
   chainName: "",
   ensAddress: "",
   blocknumber: 0,
+  stateId: 0
 }
 
 // Augment Window interface to include ethereum
@@ -52,28 +52,53 @@ const wallet:any = typeof window === 'undefined' ? undefined : window.ethereum
 
 type ZustandSetter = (partial:EthersStateType|Partial<EthersStateType>|((state:EthersStateType) => EthersStateType|Partial<EthersStateType>)) => void
 type ZustandGetter = () => EthersStateType
+
 const getAccount = (ethersProvider:ethers.providers.Web3Provider, switchAccount:(acc:string) => void) => {
   ethersProvider?.send("eth_requestAccounts", []).then((accounts) => {
     if (accounts.length>0) {
       switchAccount(accounts[0].toLocaleLowerCase())
     }
-  }).catch((e)=>console.error(e))
+  }).catch((e)=> {
+    console.error(e)
+    switchAccount("")
+  })
 }
 
 const getNetworkDetails = (set:ZustandSetter, get:ZustandGetter) => {
   const chainNames = JSON.parse(process.env.NEXT_PUBLIC_CHAIN_NAMES||"")
 
   get().ethersProvider?.getNetwork().then((n) => {
-    set({
+    set(s => ({
       chainId: n.chainId,
       chainName: chainNames[n.chainId],
-      ensAddress: n.ensAddress||""
-    })
+      ensAddress: n.ensAddress||"",
+      stateId: s.stateId+1
+    }))
   })
+  .catch(error => {
+    console.error("getNetwork()", error)
+    set(s => ({
+      chainId: 0,
+      chainName: "",
+      ensAddress: "",
+      blocknumber: 0,
+      stateId: s.stateId+1
+    }))
+  })
+
   get().ethersProvider?.getBlockNumber().then((blocknumber) => {
-    set({
-      blocknumber
-    })
+    if (blocknumber > get().blocknumber)
+      set(s => ({
+        blocknumber,
+        stateId: s.stateId+1
+      }))
+  })
+  .catch(error => {
+    console.error("getBlockNumber()", error)
+    set(s => ({
+      blocknumber: 0,
+      stateId: s.stateId+1
+    }))
   })
 }
 
@@ -81,46 +106,57 @@ const switchWallet = (walletProvider:string, set:ZustandSetter, get:ZustandGette
   const oldState = get()
   if (oldState.ethersProvider) {
     oldState.ethersProvider.removeAllListeners("network")
-    oldState.ethersProvider.removeAllListeners('accountsChanged')
-    wallet.removeAllListeners()
+    oldState.ethersProvider.removeAllListeners("block")
+    wallet.removeAllListeners('accountsChanged')
+    wallet.removeAllListeners('chainChanged')
   }
   switch(walletProvider) {
     case "injected": {
-      const ethersProvider = new ethers.providers.Web3Provider(wallet)
+      const ethersProvider = new ethers.providers.Web3Provider(wallet, "any")
       getNetworkDetails(set, get)
-      ethersProvider?.on("network", () => {
+      ethersProvider?.on("network", (n:any) => {
         getNetworkDetails(set, get)
       })
       ethersProvider?.on("block", (blocknumber) => {
-        set({
-          blocknumber
-        })
+        if (blocknumber > get().blocknumber)
+          set(s => ({
+            blocknumber,
+            stateId: s.stateId+1
+          }))
       })
-      wallet.on('accountsChanged', () => {
-        if (ethersProvider)
+
+      wallet.on('accountsChanged', (a:any) => {
           getAccount(ethersProvider, oldState.switchAccount)
       })
-  
-      if (ethersProvider)
+      wallet.on('chainChanged', (c:any) => {
+        getNetworkDetails(set, get)
         getAccount(ethersProvider, oldState.switchAccount)
+      })  
+      getAccount(ethersProvider, oldState.switchAccount)
 
-      set({
+      set(s => ({
         ...defaultEthersStateData, // overwrite old data
         walletProvider,
-        ethersProvider
-      })
+        ethersProvider,
+        stateId: s.stateId+1
+      }))
+
       break;
     }
 
     default: {
-      set(defaultEthersStateData)
+      set(s => ({ 
+        ...defaultEthersStateData, 
+        account: s.account,
+        stateId: s.stateId+1
+      }))
       break;
     }
   }
 }
 
 const switchAccount = (acc:string, set:ZustandSetter, get:ZustandGetter) => {
-  set({account: acc})
+  set(s => ({account: acc, stateId: s.stateId+1}))
 }
 
 export const useEthersState = create<EthersStateType>()((set, get) => ({
@@ -132,4 +168,3 @@ export const useEthersState = create<EthersStateType>()((set, get) => ({
 }))
 
 //const stopLogging = useEthersState.subscribe(console.log)
-

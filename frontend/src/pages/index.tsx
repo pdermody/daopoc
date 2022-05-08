@@ -8,11 +8,13 @@ import ReadBox from 'components/ReadBox'
 import ReadGovernorContract from 'components/ReadGovernorContract'
 import NetworkInfo from 'components/NetworkInfo'
 import { useEthersState } from 'store/AccountData'
+import { useDebouncedEffect } from 'utils/debounce'
 
 const Home: NextPage = () => {
   const ethersProvider = useEthersState(s => s.ethersProvider)
   const account = useEthersState(s => s.account)
   const chainId = useEthersState(s => s.chainId)
+  const stateId = useEthersState(s => s.stateId)
   const [error, setError] = useState<string>("")
   const toast = useToast()
 
@@ -25,19 +27,16 @@ const Home: NextPage = () => {
     })
   }, [toast])
 
-  useEffect(() => {
-    if (!ethersProvider)
-      return;
+  const onBlockEvent = (num:number) => {
+    showToast("New Block: " + num)
+  }
 
-    const onBlockEvent = (num:number) => {
-      showToast("New Block: " + num)
-    }
-    ethersProvider.on("block", onBlockEvent)
-
-    return () => {
-      ethersProvider.off("block", onBlockEvent)
-    }
-  },[ethersProvider, showToast])
+  // Debounce handling changes to accounts and blockchains
+  useDebouncedEffect(() => {
+    ethersProvider?.on("block", onBlockEvent)
+  }, () => {
+    ethersProvider?.off("block", onBlockEvent)
+  }, [stateId, ethersProvider, showToast])
 
   return (
     <>

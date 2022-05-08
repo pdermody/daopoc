@@ -8,6 +8,7 @@ import AccountPanel from 'components/AccountPanel'
 import { GovernanceToken__factory } from '../../typechain-types'
 import { env } from 'utils/util'
 import { useEthersState } from 'store/AccountData'
+import { useDebouncedEffect } from 'utils/debounce'
 
 type Account = { 
   publicKey: string
@@ -17,10 +18,13 @@ type Account = {
 
 const Accounts: NextPage = () => {
   const ethersProvider = useEthersState(s => s.ethersProvider)
-  const account = useEthersState(s => s.account)
+  const userAccount = useEthersState(s => s.account)
+  const stateId = useEthersState(s => s.stateId)
   const [accounts, setAccounts] = useState<Account[]>([])
   const [totalSupplyTokens, setTotalSupplyTokens] = useState<BigNumber>()
   const toast = useToast()
+
+  const token = ethersProvider && GovernanceToken__factory.connect(env("CONTRACT_GOVERNANCE_TOKEN", process.env.NEXT_PUBLIC_CONTRACT_GOVERNANCE_TOKEN), ethersProvider);
 
   const showToast = (description:string, type:AlertStatus = "success") => {
     toast({
@@ -31,32 +35,26 @@ const Accounts: NextPage = () => {
     })
   }
 
-  const onBlockEvent = (num:number) => {
-      showToast("New Block: " + num)
-    }
-
   useEffect(() => {
-    // if (ethersProvider)
-    //   ethersProvider.on("block", onBlockEvent)
-    // return () => {
-    //   ethersProvider?.removeListener("block", onBlockEvent)
-    // }
-  },[account, ethersProvider])
+    setAccounts([])
 
-  useEffect(() => {
     fetch("/api/getAccounts").then(response => {
       response.json().then((json => {
         setAccounts(ac => json)
       }))
     })
+    .catch(error => console.error("getAccounts()", error))
+  }, [])
 
-    if (ethersProvider) {
-      const token = GovernanceToken__factory.connect(env("CONTRACT_GOVERNANCE_TOKEN", process.env.NEXT_PUBLIC_CONTRACT_GOVERNANCE_TOKEN), ethersProvider);
-      token.totalSupply().then((total:ethers.BigNumber)=>{
-        setTotalSupplyTokens(total);
-      }).catch(error => console.error("getVotes()", error));
-    }
-  },[account, ethersProvider])
+  // Debounce handling changes to accounts and blockchains
+  useDebouncedEffect(() => {
+    token && token.totalSupply().then((total:ethers.BigNumber)=>{
+      setTotalSupplyTokens(total);
+    }).catch(error => {
+      console.error("totalSupply()", error)
+      setTotalSupplyTokens(ethers.constants.Zero);
+    });
+  }, () => {}, [stateId, userAccount, ethersProvider])
 
   return (
     <>
@@ -64,7 +62,7 @@ const Accounts: NextPage = () => {
         <title>Stateside Governance Test Accounts</title>
       </Head>
 
-      {account ?
+      {userAccount ?
         <Wrap spacing='1rem' justify='space-evenly'>
           {accounts.map((a,i) => 
             <AccountPanel key={a.publicKey} account={a.publicKey} privatekey={a.privateKey} toast={showToast} index={i} totalSypplyTokens={totalSupplyTokens||ethers.constants.Zero} />

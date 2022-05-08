@@ -13,6 +13,7 @@ import ColorInput, { Color } from './ColorInput';
 import { ProposalCreatedEvent, ProposalQueuedEvent, VoteCastEvent } from '../../typechain-types/contracts/governance_standard/GovernorContract';
 import { CallExecutedEvent } from '../../typechain-types/contracts/governance_standard/TimeLock';
 import ChannelInput, { Channel } from './TVChannelInput';
+import { useDebouncedEffect } from 'utils/debounce';
 
 const Votes = ["Against", "For", "Abstain"]
 
@@ -43,6 +44,9 @@ interface VotingResponse {
 
 const ReadGovernorContract = (props:Props) => {
   const ethersProvider = useEthersState(s => s.ethersProvider)
+  if(!ethersProvider) 
+    return null
+
   const [votingDelay,setVotingDelay]= useState<number>()
   const [votingPeriod,setVotingPeriod]= useState<number>()
   const [minDelay,setMinDelay]= useState<number>(0)
@@ -58,145 +62,146 @@ const ReadGovernorContract = (props:Props) => {
   const chainId = props.chainId
   const toast = props.toast
   const [chainUrls, setChainUrls] = useState<{[key:string]:string}>({})
+  const stateId = useEthersState(s => s.stateId)
+
+  const gov = GovernorContract__factory.connect(env("CONTRACT_GOVERNOR", process.env.NEXT_PUBLIC_CONTRACT_GOVERNOR), ethersProvider);
+  const timelock = TimeLock__factory.connect(env("CONTRACT_TIMELOCK", process.env.NEXT_PUBLIC_CONTRACT_TIMELOCK), ethersProvider);
 
   useEffect(() =>{
     const json = JSON.parse(process.env.NEXT_PUBLIC_CHAIN_URLS||"")
     setChainUrls(json)
   }, []) 
 
-  useEffect( () => {
-    if(!ethersProvider) 
+  const updateAllProposalDetails = (l?:ProposalInfo[]) => {
+    if (l === undefined || !Array.isArray(l))
+      l = proposalList
+    if (l === undefined)
+      return
+    l.forEach((p:ProposalInfo) => updateProposalDetails(p))
+  }
+
+  if (proposalList === undefined)
+    fetch("/api/getProposals?cid="+chainId, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+    })
+    .then((response:any) => response.json())
+    .then((response:ProposalInfo[]) => {
+      if (proposalList === undefined){
+        setProposalList(l => l===undefined?response:l)
+        updateAllProposalDetails(response)
+      }
+    })
+    .catch(e => console.error)
+
+  const updateProposalDetails = (p:ProposalInfo) => {
+    if (p.state === 7) // executed
+      return
+    gov.proposalVotes(p.id).then((v:VotingResponse) => onVotingResults(p.id.toString(), v))
+      .catch(e => console.error)
+    gov.state(p.id).then((s:number) => onProposalState(p.id.toString(), s))
+      .catch(e => console.error)
+  }
+  
+  const onProposalCreatedEvent = (
+    proposalId: BigNumber,
+    proposer: string ,
+    targets: string[] ,
+    values: BigNumber[],
+    signatures: string[] ,
+    calldatas: string[] ,
+    startBlock: BigNumber,
+    endBlock: BigNumber,
+    description: string,
+    e: ProposalCreatedEvent
+  ) => {
+    if (e.blockNumber < blocknumber || blocknumber == 0)
       return
 
-    const gov = GovernorContract__factory.connect(env("CONTRACT_GOVERNOR", process.env.NEXT_PUBLIC_CONTRACT_GOVERNOR), ethersProvider);
-    const timelock = TimeLock__factory.connect(env("CONTRACT_TIMELOCK", process.env.NEXT_PUBLIC_CONTRACT_TIMELOCK), ethersProvider);
-
-    const updateAllProposalDetails = (l?:ProposalInfo[]) => {
-      if (l === undefined || !Array.isArray(l))
-        l = proposalList
-      if (!ethersProvider || l === undefined)
-        return
-      l.forEach((p:ProposalInfo) => updateProposalDetails(p))
+    toast("Proposal added: " + description)
+    const pid = proposalId.toHexString()
+    const newProposalInfo:ProposalInfo = {
+      id: pid,
+      description,
+      calldatas,
+      targets,
+      chainId: chainId.toString(),
+      values: values.map(v => v.toNumber())
     }
+    setProposalList(l => l===undefined || l.find(p => p.id === pid)?l:[...l, newProposalInfo])
 
-    if (proposalList === undefined)
-      fetch("/api/getProposals?cid="+chainId, {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' },
-      })
-      .then((response:any) => response.json())
-      .then((response:ProposalInfo[]) => {
-        if (proposalList === undefined){
-          setProposalList(l => l===undefined?response:l)
-          updateAllProposalDetails(response)
-        }
+    gov.proposalVotes(pid)
+      .then((v:VotingResponse) => onVotingResults(pid, v))
+      .catch(e => console.error)
+    gov.state(pid)
+      .then((s:number) => onProposalState(pid, s))
+      .catch(e => console.error)
+  }
 
-      })
-
-    const updateProposalDetails = (p:ProposalInfo) => {
-      if (!ethersProvider || p.state === 7) // executed
-        return
-      const gov = GovernorContract__factory.connect(env("CONTRACT_GOVERNOR", process.env.NEXT_PUBLIC_CONTRACT_GOVERNOR), ethersProvider);
-      gov.proposalVotes(p.id).then((v:VotingResponse) => onVotingResults(p.id.toString(), v))
-        .catch(e => console.error)
-      gov.state(p.id).then((s:number) => onProposalState(p.id.toString(), s))
-        .catch(e => console.error)
-    }
-    
-    const onProposalCreatedEvent = (
-      proposalId: BigNumber,
-      proposer: string ,
-      targets: string[] ,
-      values: BigNumber[],
-      signatures: string[] ,
-      calldatas: string[] ,
-      startBlock: BigNumber,
-      endBlock: BigNumber,
-      description: string,
-      e: ProposalCreatedEvent
+  const onVoteCastEvent = (
+    voter:string, 
+    proposalId:BigNumber, 
+    support:number, 
+    weight:BigNumber,
+    reason:string,
+    e:VoteCastEvent
     ) => {
-      if (e.blockNumber < blocknumber || blocknumber == 0)
+      if (e.blockNumber < blocknumber || blocknumber == 0 || proposalList === undefined)
         return
-  
-      toast("Proposal added: " + description)
-      const pid = proposalId.toHexString()
-      const newProposalInfo:ProposalInfo = {
-        id: pid,
-        description,
-        calldatas,
-        targets,
-        chainId: chainId.toString(),
-        values: values.map(v => v.toNumber())
-      }
-      setProposalList(l => l===undefined || l.find(p => p.id === pid)?l:[...l, newProposalInfo])
 
-      const gov = GovernorContract__factory.connect(env("CONTRACT_GOVERNOR", process.env.NEXT_PUBLIC_CONTRACT_GOVERNOR), ethersProvider);
-      gov.proposalVotes(pid).then((v:VotingResponse) => onVotingResults(pid, v))
-      gov.state(pid).then((s:number) => onProposalState(pid, s))
+      const pid = proposalId.toHexString()
+      onVoteCast(pid, support, weight)
+      const p = proposalList.find(p=>p.id === pid)
+      if (p)
+        toast("New vote detected:" + Votes[support] + " " + p.description)
     }
-  
-    const onVoteCastEvent = (
-      voter:string, 
-      proposalId:BigNumber, 
-      support:number, 
-      weight:BigNumber,
-      reason:string,
-      e:VoteCastEvent
-      ) => {
-        if (e.blockNumber < blocknumber || blocknumber == 0 || proposalList === undefined)
-          return
-  
-        const pid = proposalId.toHexString()
-        onVoteCast(pid, support, weight)
-        const p = proposalList.find(p=>p.id === pid)
-        if (p)
-          toast("New vote detected:" + Votes[support] + " " + p.description)
+
+  const onProposalQueuedEvent = (
+    id:string, 
+    timestamp:BigNumber,
+    e:ProposalQueuedEvent
+    ) => {
+      if (e.blockNumber < blocknumber || blocknumber == 0 || proposalList === undefined)
+        return
+
+      const p = proposalList.find(p=>p.id === id)
+      if (p) {
+        updateProposalDetails(p)
+        toast("Proposal Queued:" + p.description)
       }
-  
-    const onProposalQueuedEvent = (
+    }
+
+  const onCallExecutedEvent = (
       id:string, 
-      timestamp:BigNumber,
-      e:ProposalQueuedEvent
+      index:BigNumber, 
+      target:string, 
+      value:BigNumber,
+      data:string,
+      e:CallExecutedEvent
       ) => {
         if (e.blockNumber < blocknumber || blocknumber == 0 || proposalList === undefined)
           return
-  
+
         const p = proposalList.find(p=>p.id === id)
         if (p) {
           updateProposalDetails(p)
-          toast("Proposal Queued:" + p.description)
+          toast("Proposal Executed:" + p.description)
         }
       }
-  
-    const onCallExecutedEvent = (
-        id:string, 
-        index:BigNumber, 
-        target:string, 
-        value:BigNumber,
-        data:string,
-        e:CallExecutedEvent
-        ) => {
-          if (e.blockNumber < blocknumber || blocknumber == 0 || proposalList === undefined)
-            return
-  
-          const p = proposalList.find(p=>p.id === id)
-          if (p) {
-            updateProposalDetails(p)
-            toast("Proposal Executed:" + p.description)
-          }
-        }
-  
+
+  // Debounce handling changes to accounts and blockchains
+  useDebouncedEffect(() => {
     gov.s_votingDelay().then((result:ethers.BigNumber)=>{
       setVotingDelay(result.toNumber())
-    }).catch(error => { console.error("s_votingDelay()", error); setError(error.message); });
+    }).catch(error => { console.error("s_votingDelay()", error); });
 
     gov.s_votingPeriod().then((result:ethers.BigNumber)=>{
       setVotingPeriod(result.toNumber())
-    }).catch(error => { console.error("s_votingPeriod()", error); setError(error.message); });
+    }).catch(error => { console.error("s_votingPeriod()", error); });
 
     timelock.getMinDelay().then((result:ethers.BigNumber)=>{
       setMinDelay(result.toNumber())
-    }).catch(error => { console.error("getMinDelay()", error); setError(error.message); });
+    }).catch(error => { console.error("getMinDelay()", error); });
 
     ethersProvider.on("block", updateAllProposalDetails) // Probably should be more intelligent about when we recheck proposal state
 
@@ -205,14 +210,13 @@ const ReadGovernorContract = (props:Props) => {
     gov.on("ProposalQueued", onProposalQueuedEvent)
     timelock.on("CallExecuted", onCallExecutedEvent)
   
-    return () => {
-      ethersProvider.off("block", updateAllProposalDetails)
-      gov.off("ProposalCreated", onProposalCreatedEvent)
-      gov.off("VoteCast", onVoteCastEvent)
-      gov.off("ProposalQueued", onProposalQueuedEvent)
-      timelock.off("CallExecuted", onCallExecutedEvent)
-    }
-  },[ethersProvider, blocknumber, proposalList, toast, chainId])  
+  }, () => {
+    ethersProvider.off("block", updateAllProposalDetails)
+    gov.off("ProposalCreated", onProposalCreatedEvent)
+    gov.off("VoteCast", onVoteCastEvent)
+    gov.off("ProposalQueued", onProposalQueuedEvent)
+    timelock.off("CallExecuted", onCallExecutedEvent)
+  }, [stateId, ethersProvider, blocknumber, proposalList, toast, chainId])  
 
   const onVotingResults = (id:string, v:VotingResponse) => {
     setProposalList(l => 
@@ -292,6 +296,7 @@ const ReadGovernorContract = (props:Props) => {
             description: description      
           })
       })
+      .catch(e => console.error)
     }).then(() => toast("Request to change size sent to create a new proposal."))
     .catch(error => toast(error.data?.message ? error.data.message : error.message,'error'))
   }

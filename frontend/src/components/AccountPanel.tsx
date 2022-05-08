@@ -3,12 +3,13 @@ import { BigNumber, ethers } from 'ethers'
 import { commify, formatEther } from 'ethers/lib/utils'
 import { env, percentage, shorten } from 'utils/util'
 import { FaCopy, FaArrowUp, FaArrowDown } from 'react-icons/fa';
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { GovernanceToken__factory } from '../../typechain-types';
-import { ApprovalEvent, DelegateChangedEvent, TransferEvent } from '../../typechain-types/contracts/GovernanceToken';
+import { ApprovalEvent, DelegateChangedEvent, GovernanceToken, TransferEvent } from '../../typechain-types/contracts/GovernanceToken';
 import { useEthersState } from 'store/AccountData';
 import IntegerInput from './IntegerInput';
 import TransferInput, { TransferData } from './TransferInput';
+import { useDebouncedEffect } from 'utils/debounce';
 
 type AccountPanelProps = {
     index: number
@@ -20,13 +21,15 @@ type AccountPanelProps = {
 }
 
 const AccountPanel = (props:AccountPanelProps) => {
+    const ethersProvider = useEthersState(s => s.ethersProvider)
+    const panelAccount = props.account
+    const userAccount = useEthersState(s => s.account)        
     const [balance, setBalance] = useState<BigNumber>()
     const [shares, setShares] = useState<BigNumber>()
     const [allowance, setAllowance] = useState<BigNumber>()
     const [votes, setVotes] = useState<BigNumber>()
-    const ethersProvider = useEthersState(s => s.ethersProvider)
     const blocknumber = useEthersState(s => s.blocknumber)
-    const account = useEthersState(s => s.account)
+    const stateId = useEthersState(s => s.stateId)
     const [symbol,setSymbol]= useState<string>("")
     const { isOpen:isSharesInputOpen, onOpen:onSharesInputOpen, onClose:onSharesInputClose } = useDisclosure()
     const { isOpen:isAllowanceInputOpen, onOpen:onAllowanceInputOpen, onClose:onAllowanceInputClose } = useDisclosure()
@@ -35,110 +38,114 @@ const AccountPanel = (props:AccountPanelProps) => {
 
     const [showWholePropsAccount,setShowWholePropsAccount]= useState<boolean>(false)
     const [showWholePrivateKey,setShowWholePrivateKey]= useState<boolean>(false)
-    const propsAccount = props.account
     const totalSypplyTokens = props.totalSypplyTokens
     const privatekey = props.privatekey
     const toast = props.toast
 
     const sharesPercentage = percentage(totalSypplyTokens, shares)
     const votesPercentage = percentage(totalSypplyTokens, votes)
+    const token = ethersProvider && GovernanceToken__factory.connect(env("CONTRACT_GOVERNANCE_TOKEN", process.env.NEXT_PUBLIC_CONTRACT_GOVERNANCE_TOKEN), ethersProvider)
+    const signer = ethersProvider && ethersProvider.getSigner()
+    const tokenWithSigner = signer && GovernanceToken__factory.connect(env("CONTRACT_GOVERNANCE_TOKEN", process.env.NEXT_PUBLIC_CONTRACT_GOVERNANCE_TOKEN), signer);
+
+    const reloadBalance = () => {
+        ethersProvider?.getBalance(panelAccount).then((result)=>{
+            setBalance(result)
+        }).catch(error => {
+            console.error("getBalance()", error)
+            setBalance(ethers.constants.Zero)
+        });
+    }
     
-    useEffect(() => {
-        if (!account || !ethersProvider)
-            return;
-            
-        const reloadBalance = () => {
-            if (propsAccount && ethersProvider && !balance) {
-                ethersProvider.getBalance(propsAccount).then((result)=>{
-                    setBalance(result)
-                })
-            }
-        }
+    const reloadVotes = () => {
+        token?.getVotes(panelAccount).then((votes:ethers.BigNumber)=>{
+            setVotes(votes);
+        }).catch(error => {
+            console.error("getVotes()", error)
+            setVotes(ethers.constants.Zero)
+        });
+    }
     
-        const reloadVotes = () => {
-            if (ethersProvider) {
-                const token = GovernanceToken__factory.connect(env("CONTRACT_GOVERNANCE_TOKEN", process.env.NEXT_PUBLIC_CONTRACT_GOVERNANCE_TOKEN), ethersProvider);
-                token.getVotes(propsAccount).then((votes:ethers.BigNumber)=>{
-                    setVotes(votes);
-                }).catch(error => console.error("getVotes()", error));
-            }
-        }
+    const reloadShares = () => {
+        token?.balanceOf(panelAccount).then((shares:ethers.BigNumber)=>{
+            setShares(shares);
+        }).catch(error => {
+            console.error("getShares()", error)
+            setShares(ethers.constants.Zero)
+        });
+    }
     
-        const reloadShares = () => {
-            if (ethersProvider) {
-                const token = GovernanceToken__factory.connect(env("CONTRACT_GOVERNANCE_TOKEN", process.env.NEXT_PUBLIC_CONTRACT_GOVERNANCE_TOKEN), ethersProvider);
-                token.balanceOf(propsAccount).then((shares:ethers.BigNumber)=>{
-                    setShares(shares);
-                }).catch(error => console.error("getVotes()", error));
-            }
-        }
-    
-        /** Determine how much of owners balance has been approved for spending by account in propsAccount */
-        const reloadAllowances = (owner: string) => {
-            if (ethersProvider) {
-                const token = GovernanceToken__factory.connect(env("CONTRACT_GOVERNANCE_TOKEN", process.env.NEXT_PUBLIC_CONTRACT_GOVERNANCE_TOKEN), ethersProvider);
-                token.allowance(owner, propsAccount).then((allowance:ethers.BigNumber)=>{
-                    setAllowance(allowance);
-                }).catch(error => console.error("getVotes()", error));
-            }
-        }
-    
-        reloadBalance()
+    /** Determine how much of owners balance has been approved for spending by account in panelAccount */
+    const reloadAllowances = () => {
+        token?.allowance(userAccount, panelAccount).then((allowance:ethers.BigNumber)=>{
+            setAllowance(allowance);
+        }).catch(error => {
+            console.error("getVotes()", error)
+            setAllowance(ethers.constants.Zero)
+        });
+    }    
+
+    const onTransfer = (from:string, to:string, amt:BigNumber, e:TransferEvent) => {
+        if (e.blockNumber < blocknumber || blocknumber == 0)
+            return
+
         reloadShares()
         reloadVotes()
-        reloadAllowances(account)
+        reloadAllowances()
+        toast(`${commify(formatEther(amt||0))} ETH transferred from ${shorten(from)} to ${shorten(to)}}`)
+    }
 
-        const token = GovernanceToken__factory.connect(env("CONTRACT_GOVERNANCE_TOKEN", process.env.NEXT_PUBLIC_CONTRACT_GOVERNANCE_TOKEN), ethersProvider)
-        token.symbol().then((symbol:string)=>{
+    const onDelegate = (delegator:string, from:string, to:string, e:DelegateChangedEvent) => {
+        if (e.blockNumber < blocknumber || blocknumber == 0)
+            return
+
+        reloadVotes()
+        toast(`All votes from ${shorten(delegator)} delegated to ${shorten(to)}`)
+    }
+
+    const onApproval = (owner:string, spender:string, amt:BigNumber, e:ApprovalEvent) => {
+        if (e.blockNumber < blocknumber || blocknumber == 0)
+            return
+
+        reloadBalance()
+        reloadAllowances()
+        toast(`${commify(formatEther(amt||0))} ETH approved for spending by ${shorten(spender)}`)
+    }
+                
+    // Debounce handling changes to accounts and blockchains
+    useDebouncedEffect(() => {
+        reloadBalance()
+        reloadVotes()
+        reloadShares()
+        reloadAllowances()
+        
+        token?.symbol().then((symbol:string)=>{
             setSymbol(symbol)
-            }).catch(error => { console.error("symbol()", error); })
+        }).catch(error => { 
+            console.error("symbol()", error); 
+            setSymbol("")
+        })
 
-        const onTransfer = (from:string, to:string, amt:BigNumber, e:TransferEvent) => {
-            if (e.blockNumber < blocknumber || blocknumber == 0)
-                return
-            reloadShares()
-            reloadVotes()
-            reloadAllowances(account)
-            toast(`${commify(formatEther(amt||0))} ETH transferred from ${shorten(from)} to ${shorten(to)}}`)
+        if (panelAccount !== userAccount) {
+            token?.on(token?.filters.Transfer(panelAccount, null, null), onTransfer)
+            token?.on(token?.filters.Transfer(null, panelAccount, null), onTransfer)
+            token?.on(token?.filters.DelegateChanged(panelAccount, null, null), onDelegate)
+            token?.on(token?.filters.DelegateChanged(null, panelAccount, null), onDelegate)
+            token?.on(token?.filters.DelegateChanged(null, null, panelAccount), onDelegate)
+            token?.on(token?.filters.Approval(panelAccount, null, null), onApproval)
+            token?.on(token?.filters.Approval(null, panelAccount, null), onApproval)
         }
-    
-        const onDelegate = (delegator:string, from:string, to:string, e:DelegateChangedEvent) => {
-            if (e.blockNumber < blocknumber || blocknumber == 0)
-                return
-            reloadVotes()
-            toast(`All votes from ${shorten(delegator)} delegated to ${shorten(to)}`)
-        }
-    
-        const onApproval = (owner:string, spender:string, amt:BigNumber, e:ApprovalEvent) => {
-            if (e.blockNumber < blocknumber || blocknumber == 0)
-                return
-            reloadBalance()
-            reloadAllowances(account)
-            toast(`${commify(formatEther(amt||0))} ETH approved for spending by ${shorten(spender)}`)
-        }
-                    
-        if (propsAccount !== account) {
-            token.on(token.filters.Transfer(propsAccount, null, null), onTransfer)
-            token.on(token.filters.Transfer(null, propsAccount, null), onTransfer)
-            token.on(token.filters.DelegateChanged(propsAccount, null, null), onDelegate)
-            token.on(token.filters.DelegateChanged(null, propsAccount, null), onDelegate)
-            token.on(token.filters.DelegateChanged(null, null, propsAccount), onDelegate)
-            token.on(token.filters.Approval(propsAccount, null, null), onApproval)
-            token.on(token.filters.Approval(null, propsAccount, null), onApproval)
-        }
+    }, () => {
+        token?.off(token?.filters.Transfer(panelAccount, null, null), onTransfer)
+        token?.off(token?.filters.Transfer(null, panelAccount, null), onTransfer)
+        token?.off(token?.filters.DelegateChanged(panelAccount, null, null), onDelegate)
+        token?.off(token?.filters.DelegateChanged(null, panelAccount, null), onDelegate)
+        token?.off(token?.filters.DelegateChanged(null, null, panelAccount), onDelegate)
+        token?.off(token?.filters.Approval(panelAccount, null, null), onApproval)
+        token?.off(token?.filters.Approval(null, panelAccount, null), onApproval)
+    }, [stateId, userAccount, ethersProvider, panelAccount, toast], 1000)
 
-        return () => {
-            token.off(token.filters.Transfer(propsAccount, null, null), onTransfer)
-            token.off(token.filters.Transfer(null, propsAccount, null), onTransfer)
-            token.off(token.filters.DelegateChanged(propsAccount, null, null), onDelegate)
-            token.off(token.filters.DelegateChanged(null, propsAccount, null), onDelegate)
-            token.off(token.filters.DelegateChanged(null, null, propsAccount), onDelegate)
-            token.off(token.filters.Approval(propsAccount, null, null), onApproval)
-            token.off(token.filters.Approval(null, propsAccount, null), onApproval)
-        }
-    }, [account, ethersProvider, propsAccount, balance, blocknumber, toast])
-
-    const border = propsAccount===account ?
+    const border = panelAccount===userAccount ?
         {
             borderColor: "teal",
             borderWidth: "3px" 
@@ -149,12 +156,12 @@ const AccountPanel = (props:AccountPanelProps) => {
 
     const onCopyAccount = () => {
         if (navigator.clipboard) {
-            navigator.clipboard.writeText(propsAccount)
-            toast("Public Key Copied: "+propsAccount)
+            navigator.clipboard.writeText(panelAccount)
+            toast("Public Key Copied: "+panelAccount)
         }
         else
             setShowWholePropsAccount(!showWholePropsAccount)
-        console.log(propsAccount)
+        console.log(panelAccount)
     }
 
     const onCopyPrivateKey = () => {
@@ -169,66 +176,42 @@ const AccountPanel = (props:AccountPanelProps) => {
     }
     
     const onTransferShares = (val:number) => {
-        if (ethersProvider) {
-            const signer = ethersProvider.getSigner()
-            const token = GovernanceToken__factory.connect(env("CONTRACT_GOVERNANCE_TOKEN", process.env.NEXT_PUBLIC_CONTRACT_GOVERNANCE_TOKEN), signer);
-
-            token.transfer(propsAccount, ethers.constants.WeiPerEther.mul(val)).then(() => {
-                toast("Shares transfer requested")
-            })
-            .catch(error => toast(error.data?.message ? error.data.message : error.message,'error'))
-        }
+        tokenWithSigner?.transfer(panelAccount, ethers.constants.WeiPerEther.mul(val)).then(() => {
+            toast("Shares transfer requested")
+        })
+        .catch(error => toast(error.data?.message ? error.data.message : error.message,'error'))
     }
     
     const onDelegateVotes = () => {
-        if (ethersProvider) {
-            const signer = ethersProvider.getSigner()
-            const token = GovernanceToken__factory.connect(env("CONTRACT_GOVERNANCE_TOKEN", process.env.NEXT_PUBLIC_CONTRACT_GOVERNANCE_TOKEN), signer);
-
-            token.delegate(propsAccount).then(() => {
-                toast("Vote delegation requested")
-            })
-            .catch(error => toast(error.data?.message ? error.data.message : error.message,'error'))
-        }
+        tokenWithSigner?.delegate(panelAccount).then(() => {
+            toast("Vote delegation requested")
+        })
+        .catch(error => toast(error.data?.message ? error.data.message : error.message,'error'))
     }
 
     const onApproveAllowance = (val:number) => {
-        if (ethersProvider) {
-            const signer = ethersProvider.getSigner()
-            const token = GovernanceToken__factory.connect(env("CONTRACT_GOVERNANCE_TOKEN", process.env.NEXT_PUBLIC_CONTRACT_GOVERNANCE_TOKEN), signer);
-
-            token.approve(propsAccount, ethers.constants.WeiPerEther.mul(val)).then(() => {
-                toast("Allowance approval requested")
-            })
-            .catch(error => toast(error.data?.message ? error.data.message : error.message,'error'))
-        }
+        tokenWithSigner?.approve(panelAccount, ethers.constants.WeiPerEther.mul(val)).then(() => {
+            toast("Allowance approval requested")
+        })
+        .catch(error => toast(error.data?.message ? error.data.message : error.message,'error'))
     }
     
     const onTransferAddress = (data:TransferData) => {
-        if (ethersProvider) {
-            const signer = ethersProvider.getSigner()
-            const token = GovernanceToken__factory.connect(env("CONTRACT_GOVERNANCE_TOKEN", process.env.NEXT_PUBLIC_CONTRACT_GOVERNANCE_TOKEN), signer);
-
-            token.transfer(data.address, ethers.constants.WeiPerEther.mul(data.amount)).then(() => {
-                toast("Transfer requested")
-            })
-            .catch(error => toast(error.data?.message ? error.data.message : error.message,'error'))
-        }
+        tokenWithSigner?.transfer(data.address, ethers.constants.WeiPerEther.mul(data.amount)).then(() => {
+            toast("Transfer requested")
+        })
+        .catch(error => toast(error.data?.message ? error.data.message : error.message,'error'))
     }
 
     const onTransferEth = (amt:number) => {
-        if (ethersProvider) {
-            const signer = ethersProvider.getSigner()
-
-            const tx = signer.sendTransaction({
-                to: propsAccount,
-                value: ethers.constants.WeiPerEther.mul(amt)
-            })
-            .then(() => {
-                toast("Transfer requested")
-            })
-            .catch(error => toast(error.data?.message ? error.data.message : error.message,'error'))
-        }
+        signer?.sendTransaction({
+            to: panelAccount,
+            value: ethers.constants.WeiPerEther.mul(amt)
+        })
+        .then(() => {
+            toast("Transfer requested")
+        })
+        .catch(error => toast(error.data?.message ? error.data.message : error.message,'error'))
     }
 
     return (
@@ -240,7 +223,7 @@ const AccountPanel = (props:AccountPanelProps) => {
                         {"Account " + (props.index+1) + ":"} 
                     </Box>
                     <Badge colorScheme='blue' ml='2' >
-                        {showWholePropsAccount ? (<>{propsAccount}<br/></>) : shorten(propsAccount)}
+                        {showWholePropsAccount ? (<>{panelAccount}<br/></>) : shorten(panelAccount)}
                         <IconButton variant="link" color="ButtonText" ml="2" size="xs" title='Copy' icon={<FaCopy size=".6rem" />} aria-label='Copy Public Key' onClick={onCopyAccount} />
                     </Badge>
                 </Box>
@@ -251,7 +234,7 @@ const AccountPanel = (props:AccountPanelProps) => {
                     </Box>
                     <Badge borderRadius='full' px='2' colorScheme='green' ml='2'>
                         {commify(formatEther(balance||0)).substring(0, 10)} ETH
-                        {propsAccount!==account ?
+                        {panelAccount!==userAccount ?
                             <IconButton variant="link" color="ButtonText" ml="2" size="xs" title='Transfer ETH to this account' icon={<FaArrowUp size=".6rem" />} aria-label='Transfer ETH' onClick={onTransferEthInputOpen} />
                             : ""
                         }
@@ -264,11 +247,11 @@ const AccountPanel = (props:AccountPanelProps) => {
                     </Box>
                     <Badge borderRadius='full' px='2' colorScheme='orange' ml='2'>
                         {commify(formatEther(shares||0))} ({sharesPercentage} %)
-                        {propsAccount!==account ?
+                        {panelAccount!==userAccount ?
                             <IconButton variant="link" color="ButtonText" ml="2" size="xs" title='Transfer shares to this account' icon={<FaArrowUp size=".6rem" />} aria-label='Transfer Shares' onClick={onSharesInputOpen} />
                             : ""
                         }
-                        {propsAccount===account ?
+                        {panelAccount===userAccount ?
                             <IconButton variant="link" color="ButtonText" ml="0" size="xs" title='Transfer shares to a new account' icon={<FaArrowDown size=".6rem" />} aria-label='Transfer Shares to a new account ' onClick={onTransferInputOpen} />
                             : ""
                         }
@@ -292,7 +275,7 @@ const AccountPanel = (props:AccountPanelProps) => {
                     </Box>
                     <Badge borderRadius='full' px='2' colorScheme='teal' ml='2'>
                         {commify(formatEther(allowance||0))} {symbol}
-                        {propsAccount!==account ?
+                        {panelAccount!==userAccount ?
                             <IconButton variant="link" color="ButtonText" ml="2" size="xs" title='Approve Allowance' icon={<FaArrowUp size=".6rem" />} aria-label='Transfer Shares' onClick={() => onAllowanceInputOpen} />
                             : ""
                         }
@@ -352,6 +335,6 @@ const AccountPanel = (props:AccountPanelProps) => {
 
       </WrapItem>
     )
-  }
+}
 
-  export default AccountPanel
+export default AccountPanel
