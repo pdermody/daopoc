@@ -34,7 +34,7 @@ See [Docs](https://docs.openzeppelin.com/contracts/4.x/governance) for details
     - An amount of ETH sent to each contract
     - Encoded function names and arguments for each target
     - A description of the proposal
-  - Implements castVoteBySig() to allow callers to vote on behalf of someone else using a message signed by the owner account (this is not the same as delagation which does not require a signature)
+  - Implements castVoteBySig() to allow callers to vote on behalf of someone else using a message signed by the owner account (this is not the same as delegation)
   - Defines a function called executor() which determines who can execute a proposal. By default this is the Governor contract. However it can be overridden, and in fact it IS overridden by GovernorTimelockControl described later to ensure only the timelock contract can execute the proposal.
   - Defines a modifier called onlyGovernance which restricts certain function calls to the executor()
   - IMPORTANT: this contract does not record the details of the proposals and offers no iterator for viewing active proposals. I temporarily added an API handler to the frontend to do this, we will need a better solution - maybe a serverless database. The hashing algorithm used in the Contract ensure that the proposals cannot be tampered with.
@@ -61,7 +61,7 @@ See [Docs](https://docs.openzeppelin.com/contracts/4.x/governance) for details
 
 ## @openzeppelin/contracts/governance/TimelockController.sol
   This is a contract that uses low-level message passing for running arbitrary function calls on predefined contracts after a minimum delay has passed. 
-  Calls are made using the The contract keeps track of when function calls are queued by hashing the details of the function call. Then when the execute method is called on the same data, it checks if the minimum amount of time has passed, otherwise the execution fails. (Note: It does not keep the details of the call, only a hash of it so that it can confirm it is the same call)
+  The contract keeps track of when function calls are queued by hashing the details of the function call. Then when the execute method is called on the same data, it checks if the minimum amount of time has passed, otherwise the execution fails. (Note: It does not keep the details of the call, only a hash of it so that it can confirm it is the same call)
 
   The steps to execute an operation on a given contract are as follows:
   - Call queue() on the Governor contract with the hash of the function name and arguments. This will save the hash plus a timestamp. 
